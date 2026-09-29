@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Arcade Loader</title>
+<style>
+html, body { margin:0; padding:0; height:100%; background:#140a24; color:#f2e9ff;
+  font-family:-apple-system, "Helvetica Neue", Arial, sans-serif;
+  -webkit-user-select:none; user-select:none; overflow:hidden; }
+#menu { position:absolute; top:0; left:0; right:0; bottom:0; display:flex;
+  flex-direction:column; align-items:center; justify-content:center;
+  padding:24px; box-sizing:border-box; text-align:center; }
+.marquee { font-family:Impact, "Arial Black", sans-serif; font-size:46px; letter-spacing:2px;
+  color:#ffe45c; margin:0 0 8px;
+  text-shadow:0 0 6px #ff3fa4, 0 0 18px #ff3fa4, 0 0 40px #7a1fff; }
+.sub { color:#b9a6d9; font-size:15px; line-height:1.45; margin:0 0 28px; max-width:320px; }
+.coin { display:block; width:100%; max-width:320px; padding:18px; font-size:20px; font-weight:bold;
+  color:#140a24; background:#ffe45c; border:0; border-radius:14px; margin-bottom:22px;
+  box-shadow:0 6px 0 #b8901a, 0 0 24px #ffe45c; -webkit-tap-highlight-color:transparent; }
+.coin:active { -webkit-transform:translateY(4px); transform:translateY(4px); box-shadow:0 2px 0 #b8901a; }
+.opt { display:block; font-size:14px; color:#b9a6d9; margin-bottom:6px; }
+select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radius:10px;
+  border:2px solid #4b2d7a; background:#22123b; color:#f2e9ff; }
+#status { margin-top:18px; min-height:20px; font-size:14px; color:#5cf2ff; max-width:320px; line-height:1.4; }
+#stage { display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:#000000; }
+#game { width:100%; height:100%; }
+#exit { position:absolute; top:12px; left:12px; z-index:99999; padding:8px 14px; font-size:14px;
+  font-weight:bold; color:#f2e9ff; background:#22123b; border:2px solid #ff3fa4; border-radius:10px; }
+#rom { display:none; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <h1 class="marquee">ARCADE</h1>
+  <p class="sub">Pick an arcade romset (.zip) from your device. Keep the zip named exactly as the romset, like galaga.zip.</p>
+  <button class="coin" id="pick">Insert coin (choose ROM)</button>
+  <label class="opt" for="core">Emulator core</label>
+  <select id="core">
+    <option value="mame2003_plus">MAME 2003-Plus (most games)</option>
+    <option value="mame2003">MAME 2003 (0.78 romsets)</option>
+    <option value="fbneo">FinalBurn Neo (Neo Geo, Capcom)</option>
+  </select>
+  <div id="status"></div>
+  <input type="file" id="rom" accept=".zip,.7z,application/zip">
+</div>
+
+<div id="stage">
+  <button id="exit">Exit</button>
+  <div id="game"></div>
+</div>
+
+<script>
+var CDN = 'https://cdn.emulatorjs.org/stable/data/';
+var fileInput = document.getElementById('rom');
+
+function setStatus(msg) {
+  document.getElementById('status').innerHTML = msg;
+}
+
+document.getElementById('pick').onclick = function () {
+  fileInput.value = '';
+  fileInput.click();
+};
+
+fileInput.onchange = function () {
+  var f = fileInput.files && fileInput.files[0];
+  if (!f) { return; }
+  if (!/\.(zip|7z)$/i.test(f.name)) {
+    setStatus('That is not a .zip romset. Arcade ROMs must stay zipped.');
+    return;
+  }
+  startGame(f);
+};
+
+function startGame(f) {
+  var core = document.getElementById('core').value;
+  var baseName = f.name.replace(/\.[^.]+$/, '');
+
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('stage').style.display = 'block';
+
+  window.EJS_player = '#game';
+  window.EJS_core = core;
+  window.EJS_gameUrl = f;          /* File object keeps the original zip name */
+  window.EJS_gameName = baseName;  /* MAME matches the game by this name */
+  window.EJS_pathtodata = CDN;
+  window.EJS_color = '#ff3fa4';
+  window.EJS_backgroundColor = '#000000';
+  /* No auto-start: the tap on Play unlocks audio on iOS */
+
+  var s = document.createElement('script');
+  s.src = CDN + 'loader.js';
+  s.onerror = function () {
+    document.getElementById('stage').style.display = 'none';
+    document.getElementById('menu').style.display = 'flex';
+    setStatus('Could not reach the emulator files. Check your internet connection and try again.');
+  };
+  document.body.appendChild(s);
+}
+
+/* EmulatorJS cannot cleanly unload, so Exit reloads the page */
+document.getElementById('exit').onclick = function () {
+  location.reload();
+};
+</script>
+
+</body>
+</html>
