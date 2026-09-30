@@ -55,8 +55,23 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 </div>
 
 <script>
-var CDN = 'https://cdn.emulatorjs.org/stable/data/';
+/* Pinned so the emulator can't change underneath us; 'stable' is only a fallback */
+var CDNS = ['https://cdn.emulatorjs.org/4.2.3/data/', 'https://cdn.emulatorjs.org/stable/data/'];
 var fileInput = document.getElementById('rom');
+
+/* iOS kills the page without warning when it runs out of memory, so we leave a
+   heartbeat while playing. If it is still there on the next launch, the last
+   game was killed rather than exited, and we say how long it lasted. */
+var HEARTBEAT = 'arcader_heartbeat';
+function readHeartbeat() {
+  try { return JSON.parse(localStorage.getItem(HEARTBEAT)); } catch (e) { return null; }
+}
+function writeHeartbeat(hb) {
+  try {
+    if (hb) { localStorage.setItem(HEARTBEAT, JSON.stringify(hb)); }
+    else { localStorage.removeItem(HEARTBEAT); }
+  } catch (e) {}
+}
 
 function setStatus(msg) {
   document.getElementById('status').innerHTML = msg;
@@ -66,6 +81,15 @@ document.getElementById('pick').onclick = function () {
   fileInput.value = '';
   fileInput.click();
 };
+
+var lastRun = readHeartbeat();
+writeHeartbeat(null);
+if (lastRun && lastRun.game) {
+  var secs = Math.round((lastRun.last - lastRun.start) / 1000);
+  setStatus('Last game (' + lastRun.game + ', ' + lastRun.core + ') stopped without Exit after about ' +
+    (secs >= 60 ? Math.floor(secs / 60) + ' min ' + (secs % 60) + ' s' : secs + ' s') +
+    '. If you did not close it yourself, iOS most likely ran out of memory.');
+}
 
 fileInput.onchange = function () {
   var f = fileInput.files && fileInput.files[0];
@@ -90,14 +114,31 @@ function startGame(f) {
   window.EJS_core = core;
   window.EJS_gameUrl = f;          /* File object keeps the original zip name */
   window.EJS_gameName = baseName;  /* MAME matches the game by this name */
-  window.EJS_pathtodata = CDN;
   window.EJS_color = '#ff3fa4';
   window.EJS_backgroundColor = '#000000';
+  /* Lighter settings to stay under iOS's memory limit. These are only defaults:
+     anything changed in the emulator's own settings menu still wins. */
+  window.EJS_defaultOptions = {
+    'webgl2Enabled': 'disabled',   /* WebGL1 build of the core */
+    'rewindEnabled': 'disabled',   /* rewind keeps snapshots in memory */
+    'shader': 'disabled'
+  };
   /* No auto-start: the tap on Play unlocks audio on iOS */
 
+  var hb = { game: f.name, core: core, start: Date.now(), last: Date.now() };
+  writeHeartbeat(hb);
+  setInterval(function () { hb.last = Date.now(); writeHeartbeat(hb); }, 5000);
+
+  loadEmulator(0);
+}
+
+function loadEmulator(i) {
+  window.EJS_pathtodata = CDNS[i];
   var s = document.createElement('script');
-  s.src = CDN + 'loader.js';
+  s.src = CDNS[i] + 'loader.js';
   s.onerror = function () {
+    if (i + 1 < CDNS.length) { loadEmulator(i + 1); return; }
+    writeHeartbeat(null);
     document.getElementById('stage').style.display = 'none';
     document.getElementById('menu').style.display = 'flex';
     setStatus('Could not reach the emulator files. Check your internet connection and try again.');
@@ -107,6 +148,7 @@ function startGame(f) {
 
 /* EmulatorJS cannot cleanly unload, so Exit reloads the page */
 document.getElementById('exit').onclick = function () {
+  writeHeartbeat(null);
   location.reload();
 };
 </script>
