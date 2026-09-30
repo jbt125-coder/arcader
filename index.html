@@ -36,16 +36,17 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 
 <div id="menu">
   <h1 class="marquee">ARCADE</h1>
-  <p class="sub">Pick an arcade romset (.zip) from your device. Keep the zip named exactly as the romset, like galaga.zip.</p>
+  <p class="sub">Pick an arcade romset (.zip) or NES game (.nes). Keep the zip named exactly as the romset, like galaga.zip.</p>
   <button class="coin" id="pick">Insert coin (choose ROM)</button>
   <label class="opt" for="core">Emulator core</label>
   <select id="core">
     <option value="mame2003_plus">MAME 2003-Plus (most games)</option>
     <option value="mame2003">MAME 2003 (0.78 romsets)</option>
     <option value="fbneo">FinalBurn Neo (Neo Geo, Capcom)</option>
+    <option value="nes">NES (.nes homebrew)</option>
   </select>
   <div id="status"></div>
-  <input type="file" id="rom" accept=".zip,.7z,application/zip">
+  <input type="file" id="rom" accept=".zip,.7z,.nes,application/zip">
 </div>
 
 <div id="stage">
@@ -69,8 +70,10 @@ document.getElementById('pick').onclick = function () {
 fileInput.onchange = function () {
   var f = fileInput.files && fileInput.files[0];
   if (!f) { return; }
-  if (!/\.(zip|7z)$/i.test(f.name)) {
-    setStatus('That is not a .zip romset. Arcade ROMs must stay zipped.');
+  if (/\.nes$/i.test(f.name)) {
+    document.getElementById('core').value = 'nes';
+  } else if (!/\.(zip|7z)$/i.test(f.name)) {
+    setStatus('Choose a .zip arcade romset or a .nes file.');
     return;
   }
   startGame(f);
