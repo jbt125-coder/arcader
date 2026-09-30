@@ -29,6 +29,7 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 #game { width:100%; height:100%; }
 #exit { position:absolute; top:12px; left:12px; z-index:99999; padding:8px 14px; font-size:14px;
   font-weight:bold; color:#f2e9ff; background:#22123b; border:2px solid #ff3fa4; border-radius:10px; }
+#offline { margin-top:10px; font-size:13px; color:#b9a6d9; }
 #rom { display:none; }
 </style>
 </head>
@@ -46,6 +47,7 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
     <option value="nes">NES (.nes homebrew)</option>
   </select>
   <div id="status"></div>
+  <div id="offline"></div>
   <input type="file" id="rom" accept=".zip,.7z,.nes,application/zip">
 </div>
 
@@ -55,8 +57,8 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 </div>
 
 <script>
-/* Pinned so the emulator can't change underneath us; 'stable' is only a fallback */
-var CDNS = ['https://cdn.emulatorjs.org/4.2.3/data/', 'https://cdn.emulatorjs.org/stable/data/'];
+/* The bundled copy (emulator/) works offline; the CDN is only a fallback */
+var CDNS = ['emulator/', 'https://cdn.emulatorjs.org/4.2.3/data/', 'https://cdn.emulatorjs.org/stable/data/'];
 var fileInput = document.getElementById('rom');
 
 /* iOS kills the page without warning when it runs out of memory, so we leave a
@@ -144,6 +146,15 @@ function loadEmulator(i) {
     setStatus('Could not reach the emulator files. Check your internet connection and try again.');
   };
   document.body.appendChild(s);
+}
+
+/* sw.js saves the page and emulator on the phone. navigator.serviceWorker.ready
+   resolves once everything is saved, so after that it works offline. */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+  navigator.serviceWorker.ready.then(function () {
+    document.getElementById('offline').innerHTML = 'Ready to play offline';
+  });
 }
 
 /* EmulatorJS cannot cleanly unload, so Exit reloads the page */
