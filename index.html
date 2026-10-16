@@ -37,7 +37,7 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 
 <div id="menu">
   <h1 class="marquee">ARCADE</h1>
-  <p class="sub">Pick an arcade romset (.zip) or NES game (.nes). Keep the zip named exactly as the romset, like galaga.zip.</p>
+  <p class="sub">Pick an arcade romset (.zip), NES game (.nes) or Vircon32 game (.v32). Keep the zip named exactly as the romset, like galaga.zip.</p>
   <button class="coin" id="pick">Insert coin (choose ROM)</button>
   <label class="opt" for="core">Emulator core</label>
   <select id="core">
@@ -45,10 +45,12 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
     <option value="mame2003">MAME 2003 (0.78 romsets)</option>
     <option value="fbneo">FinalBurn Neo (Neo Geo, Capcom)</option>
     <option value="nes">NES (.nes homebrew)</option>
+    <option value="vircon32">Vircon32 (.v32)</option>
   </select>
   <div id="status"></div>
   <div id="offline"></div>
-  <input type="file" id="rom" accept=".zip,.7z,.nes,application/zip">
+  <!-- No accept filter: iPhone greys out file types it doesn't know, like .v32 -->
+  <input type="file" id="rom">
 </div>
 
 <div id="stage">
@@ -96,10 +98,12 @@ if (lastRun && lastRun.game) {
 fileInput.onchange = function () {
   var f = fileInput.files && fileInput.files[0];
   if (!f) { return; }
-  if (/\.nes$/i.test(f.name)) {
+  if (/\.v32$/i.test(f.name)) {
+    document.getElementById('core').value = 'vircon32';
+  } else if (/\.nes$/i.test(f.name)) {
     document.getElementById('core').value = 'nes';
   } else if (!/\.(zip|7z)$/i.test(f.name)) {
-    setStatus('Choose a .zip arcade romset or a .nes file.');
+    setStatus('Choose a .zip arcade romset, a .nes file or a .v32 file.');
     return;
   }
   startGame(f);
