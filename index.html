@@ -11,8 +11,9 @@ html, body { margin:0; padding:0; height:100%; background:#140a24; color:#f2e9ff
   font-family:-apple-system, "Helvetica Neue", Arial, sans-serif;
   -webkit-user-select:none; user-select:none; overflow:hidden; }
 #menu { position:absolute; top:0; left:0; right:0; bottom:0; display:flex;
-  flex-direction:column; align-items:center; justify-content:center;
+  flex-direction:column; align-items:center; overflow-y:auto; -webkit-overflow-scrolling:touch;
   padding:24px; box-sizing:border-box; text-align:center; }
+.menu-inner { margin:auto 0; width:100%; display:flex; flex-direction:column; align-items:center; }
 .marquee { font-family:Impact, "Arial Black", sans-serif; font-size:46px; letter-spacing:2px;
   color:#ffe45c; margin:0 0 8px;
   text-shadow:0 0 6px #ff3fa4, 0 0 18px #ff3fa4, 0 0 40px #7a1fff; }
@@ -21,6 +22,13 @@ html, body { margin:0; padding:0; height:100%; background:#140a24; color:#f2e9ff
   color:#140a24; background:#ffe45c; border:0; border-radius:14px; margin-bottom:22px;
   box-shadow:0 6px 0 #b8901a, 0 0 24px #ffe45c; -webkit-tap-highlight-color:transparent; }
 .coin:active { -webkit-transform:translateY(4px); transform:translateY(4px); box-shadow:0 2px 0 #b8901a; }
+.cont { background:#5cf2ff; box-shadow:0 6px 0 #1f8f9c, 0 0 24px #5cf2ff; margin-bottom:16px; }
+.cont:active { box-shadow:0 2px 0 #1f8f9c; }
+.cont small { display:block; font-size:13px; font-weight:normal; margin-top:3px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ghost { width:100%; max-width:320px; margin-top:12px; padding:11px; font-size:15px; font-weight:bold;
+  color:#f2e9ff; background:transparent; border:2px solid #ff3fa4; border-radius:10px;
+  -webkit-tap-highlight-color:transparent; }
 .opt { display:block; font-size:14px; color:#b9a6d9; margin-bottom:6px; }
 select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radius:10px;
   border:2px solid #4b2d7a; background:#22123b; color:#f2e9ff; }
@@ -35,9 +43,10 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 </head>
 <body>
 
-<div id="menu">
+<div id="menu"><div class="menu-inner">
   <h1 class="marquee">ARCADE</h1>
   <p class="sub">Pick an arcade romset (.zip), NES game (.nes) or Vircon32 game (.v32). Keep the zip named exactly as the romset, like galaga.zip.</p>
+  <button class="coin cont" id="continue" hidden></button>
   <button class="coin" id="pick">Insert coin (choose ROM)</button>
   <label class="opt" for="core">Emulator core</label>
   <select id="core">
@@ -47,21 +56,25 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
     <option value="nes">NES (.nes homebrew)</option>
     <option value="vircon32">Vircon32 (.v32)</option>
   </select>
+  <button class="ghost" id="layout">Customize controller</button>
   <div id="status"></div>
   <div id="offline"></div>
   <!-- No accept filter: iPhone greys out file types it doesn't know, like .v32 -->
   <input type="file" id="rom">
-</div>
+</div></div>
 
 <div id="stage">
   <button id="exit">Exit</button>
   <div id="game"></div>
 </div>
 
+<script src="pad.js"></script>
 <script>
 /* The bundled copy (emulator/) works offline; the CDN is only a fallback */
 var CDNS = ['emulator/', 'https://cdn.emulatorjs.org/4.2.3/data/', 'https://cdn.emulatorjs.org/stable/data/'];
 var fileInput = document.getElementById('rom');
+var coreSelect = document.getElementById('core');
+var hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
 /* iOS kills the page without warning when it runs out of memory, so we leave a
    heartbeat while playing. If it is still there on the next launch, the last
@@ -95,22 +108,88 @@ if (lastRun && lastRun.game) {
     '. If you did not close it yourself, iOS most likely ran out of memory.');
 }
 
+/* Remember the last console chosen */
+var CORE_KEY = 'arcader_core';
+try {
+  var savedCore = localStorage.getItem(CORE_KEY);
+  if (savedCore && coreSelect.querySelector('option[value="' + savedCore + '"]')) { coreSelect.value = savedCore; }
+} catch (e) {}
+function rememberCore() {
+  try { localStorage.setItem(CORE_KEY, coreSelect.value); } catch (e) {}
+}
+coreSelect.onchange = rememberCore;
+
+/* Remember the last game. iPhone won't let a page reopen a file from the Files
+   app by itself, so we keep a copy of the last game in the page's own storage
+   (IndexedDB) for the Continue button. If storage is cleared it just disappears. */
+function openDB(cb) {
+  try {
+    var req = indexedDB.open('arcader', 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore('games'); };
+    req.onsuccess = function () { cb(req.result); };
+    req.onerror = function () { cb(null); };
+  } catch (e) { cb(null); }
+}
+function saveLastGame(f, core) {
+  openDB(function (db) {
+    if (!db) { return; }
+    try {
+      db.transaction('games', 'readwrite').objectStore('games')
+        .put({ file: f, name: f.name, core: core, saved: Date.now() }, 'last');
+    } catch (e) {}
+  });
+}
+function loadLastGame(cb) {
+  openDB(function (db) {
+    if (!db) { cb(null); return; }
+    try {
+      var req = db.transaction('games').objectStore('games').get('last');
+      req.onsuccess = function () { cb(req.result || null); };
+      req.onerror = function () { cb(null); };
+    } catch (e) { cb(null); }
+  });
+}
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(function () {}); }
+
+loadLastGame(function (rec) {
+  if (!rec || !rec.file || !coreSelect.querySelector('option[value="' + rec.core + '"]')) { return; }
+  var btn = document.getElementById('continue');
+  var consoleName = coreSelect.querySelector('option[value="' + rec.core + '"]').textContent.replace(/ \(.*$/, '');
+  btn.innerHTML = 'Continue: <span></span><small></small>';
+  btn.querySelector('span').textContent = rec.name.replace(/\.[^.]+$/, '');
+  btn.querySelector('small').textContent = consoleName;
+  btn.hidden = false;
+  btn.onclick = function () {
+    /* Some browsers hand back a plain Blob, so rebuild the File to keep its name */
+    var f = (rec.file instanceof File && rec.file.name) ? rec.file : new File([rec.file], rec.name);
+    coreSelect.value = rec.core;
+    rememberCore();
+    startGame(f);
+  };
+});
+
+document.getElementById('layout').onclick = function () {
+  ArcaderPad.edit(coreSelect.value);
+};
+
 fileInput.onchange = function () {
   var f = fileInput.files && fileInput.files[0];
   if (!f) { return; }
   if (/\.v32$/i.test(f.name)) {
-    document.getElementById('core').value = 'vircon32';
+    coreSelect.value = 'vircon32';
   } else if (/\.nes$/i.test(f.name)) {
-    document.getElementById('core').value = 'nes';
+    coreSelect.value = 'nes';
   } else if (!/\.(zip|7z)$/i.test(f.name)) {
     setStatus('Choose a .zip arcade romset, a .nes file or a .v32 file.');
     return;
   }
+  rememberCore();
+  saveLastGame(f, coreSelect.value);
   startGame(f);
 };
 
 function startGame(f) {
-  var core = document.getElementById('core').value;
+  var core = coreSelect.value;
   var baseName = f.name.replace(/\.[^.]+$/, '');
 
   document.getElementById('menu').style.display = 'none';
@@ -130,6 +209,19 @@ function startGame(f) {
     'shader': 'disabled'
   };
   /* No auto-start: the tap on Play unlocks audio on iOS */
+
+  /* On touch screens our own controller (pad.js) replaces EmulatorJS's: an
+     entry with no type gives it an empty layout. It appears once the game starts. */
+  if (hasTouch) {
+    window.EJS_VirtualGamepadSettings = [{}];
+    var onStart = window.EJS_onGameStart;
+    window.EJS_onGameStart = function () {
+      ArcaderPad.mount(window.EJS_emulator.elements.parent, core, function (input, value) {
+        window.EJS_emulator.gameManager.simulateInput(0, input, value);
+      });
+      if (onStart) { onStart(); }
+    };
+  }
 
   var hb = { game: f.name, core: core, start: Date.now(), last: Date.now() };
   writeHeartbeat(hb);
