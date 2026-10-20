@@ -223,6 +223,36 @@
     });
   }
 
+  /* Bluetooth controllers are read by EmulatorJS itself. We only hide the
+     on-screen controls while one is in use (touching the screen brings them
+     back) and let its left stick work as a D-pad, which NES and Vircon32
+     games expect; EmulatorJS sends the stick as analog, which they ignore. */
+  function watchControllers(root, send) {
+    if (!navigator.getGamepads) { return; }
+    var stick = {};
+    var DIRS = [['up', UP], ['down', DOWN], ['left', LEFT], ['right', RIGHT]];
+    function frame() {
+      var pads = navigator.getGamepads(), gp = null;
+      for (var i = 0; i < pads.length; i++) { if (pads[i]) { gp = pads[i]; break; } }
+      if (gp) {
+        var used = gp.buttons.some(function (b) { return b.pressed; }) ||
+          gp.axes.some(function (a) { return Math.abs(a) > 0.5; });
+        if (used) { root.style.display = 'none'; }
+        var x = gp.axes[0] || 0, y = gp.axes[1] || 0;
+        var on = { left: x < -0.5, right: x > 0.5, up: y < -0.5, down: y > 0.5 };
+        DIRS.forEach(function (d) {
+          var v = on[d[0]] ? 1 : 0;
+          if ((stick[d[0]] || 0) === v) { return; }
+          stick[d[0]] = v;
+          send(d[1], v);
+        });
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    document.addEventListener('touchstart', function () { root.style.display = ''; }, true);
+  }
+
   /* Draw the saved layout for core over a running game; send(input, value) presses it */
   function mount(container, core, send) {
     addStyle();
@@ -236,6 +266,7 @@
       isolate(el);
       if (c.input !== undefined) { bindButton(el, c.input, send); } else { bindDirections(el, send); }
     });
+    watchControllers(root, send);
     return root;
   }
 

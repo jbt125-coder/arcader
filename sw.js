@@ -1,6 +1,6 @@
 /* Saves Arcade Loader and the bundled emulator on the device so it works offline.
    Bump CACHE whenever anything in PRECACHE changes, so phones pick up the new files. */
-var CACHE = 'arcader-v3-ejs-4.2.3';
+var CACHE = 'arcader-v4-ejs-4.2.3';
 
 var PRECACHE = [
   "./",

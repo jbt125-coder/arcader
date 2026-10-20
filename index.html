@@ -37,6 +37,7 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
 #game { width:100%; height:100%; }
 #exit { position:absolute; top:12px; left:12px; z-index:99999; padding:8px 14px; font-size:14px;
   font-weight:bold; color:#f2e9ff; background:#22123b; border:2px solid #ff3fa4; border-radius:10px; }
+#padstatus { margin-top:10px; font-size:14px; color:#ffe45c; }
 #offline { margin-top:10px; font-size:13px; color:#b9a6d9; }
 #rom { display:none; }
 </style>
@@ -58,6 +59,7 @@ select { width:100%; max-width:320px; font-size:16px; padding:10px; border-radiu
   </select>
   <button class="ghost" id="layout">Customize controller</button>
   <div id="status"></div>
+  <div id="padstatus"></div>
   <div id="offline"></div>
   <!-- No accept filter: iPhone greys out file types it doesn't know, like .v32 -->
   <input type="file" id="rom">
@@ -168,6 +170,16 @@ loadLastGame(function (rec) {
   };
 });
 
+/* Bluetooth controllers: the browser only reveals one after a button on it is
+   pressed. EmulatorJS handles it in game; here we just show that it was found. */
+function showControllers() {
+  var pads = navigator.getGamepads ? Array.prototype.filter.call(navigator.getGamepads(), Boolean) : [];
+  document.getElementById('padstatus').textContent = pads.length ?
+    'Controller connected: ' + pads[0].id.replace(/\s*\(.*$/, '') : '';
+}
+window.addEventListener('gamepadconnected', showControllers);
+window.addEventListener('gamepaddisconnected', showControllers);
+
 document.getElementById('layout').onclick = function () {
   ArcaderPad.edit(coreSelect.value);
 };
@@ -212,16 +224,26 @@ function startGame(f) {
 
   /* On touch screens our own controller (pad.js) replaces EmulatorJS's: an
      entry with no type gives it an empty layout. It appears once the game starts. */
-  if (hasTouch) {
-    window.EJS_VirtualGamepadSettings = [{}];
-    var onStart = window.EJS_onGameStart;
-    window.EJS_onGameStart = function () {
-      ArcaderPad.mount(window.EJS_emulator.elements.parent, core, function (input, value) {
-        window.EJS_emulator.gameManager.simulateInput(0, input, value);
+  if (hasTouch) { window.EJS_VirtualGamepadSettings = [{}]; }
+  var onStart = window.EJS_onGameStart;
+  window.EJS_onGameStart = function () {
+    var ejs = window.EJS_emulator;
+    /* EmulatorJS only gives a Bluetooth controller to a player when it sees it
+       connect, which it misses for one already active before the game loaded */
+    try {
+      ejs.gamepad.gamepads.forEach(function (gp) {
+        var key = gp.id + '_' + gp.index, slot = ejs.gamepadSelection.indexOf('');
+        if (ejs.gamepadSelection.indexOf(key) < 0 && slot >= 0) { ejs.gamepadSelection[slot] = key; }
       });
-      if (onStart) { onStart(); }
-    };
-  }
+      ejs.updateGamepadLabels();
+    } catch (e) {}
+    if (hasTouch) {
+      ArcaderPad.mount(ejs.elements.parent, core, function (input, value) {
+        ejs.gameManager.simulateInput(0, input, value);
+      });
+    }
+    if (onStart) { onStart(); }
+  };
 
   var hb = { game: f.name, core: core, start: Date.now(), last: Date.now() };
   writeHeartbeat(hb);
